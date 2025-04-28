@@ -1,6 +1,3 @@
-# https://platform.openai.com/docs/api-reference/chat
-
-
 from typing import TypedDict
 from langgraph.graph import StateGraph, START, END
 
