@@ -97,7 +97,7 @@
           "useBackend": false
         }
       ],
-      "title": "Panel Title",
+      "title": "Kong Routes",
       "type": "stat"
     },
     {
@@ -155,7 +155,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "sum by(ai_provider) (kong_ai_llm_provider_latency_ms_count)",
+          "expr": "sum by(ai_provider, ai_model) (kong_ai_llm_provider_latency_ms_count)",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "__auto",
@@ -164,7 +164,7 @@
           "useBackend": false
         }
       ],
-      "title": "Panel Title",
+      "title": "LLMs",
       "type": "stat"
     }
   ],
