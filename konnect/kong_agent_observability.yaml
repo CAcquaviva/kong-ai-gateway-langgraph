@@ -1,0 +1,102 @@
+_format_version: "3.0"
+_info:
+  select_tags:
+  - agent_observability
+_konnect:
+  control_plane_name: ai-gateway
+plugins:
+- name: prometheus
+  instance_name: prometheus1
+  enabled: true
+  config:
+    per_consumer: true
+    status_code_metrics: true
+    latency_metrics: true
+    bandwidth_metrics: true
+    upstream_health_metrics: true
+    ai_metrics: true
+- name: http-log
+  instance_name: http-log1
+  enabled: false
+  config:
+    http_endpoint: http://loki.loki:3100/loki/api/v1/push
+    custom_fields_by_lua:
+      streams: local ts=string.format('%18.0f', os.time()*1000000000)
+        local log_payload = kong.log.serialize() 
+        local service = log_payload['service'] or 'noService'
+        local cjson = require "cjson.safe"
+        local payload_string = cjson.encode(log_payload)
+        local t = { {stream = {gateway='kong-gateway', service=service['name']}, values={{ts, payload_string}}} }
+        return t
+- name: pre-function
+  instance_name: pre-function1
+  enabled: false
+  config:
+    access:
+    - "kong.service.request.enable_buffering() kong.log.set_serialize_value(\"request.body\", kong.request.get_body())"
+    body_filter:
+    - |-
+      local concat = table.concat
+      local pl_stringio = require "pl.stringio"
+      local stringio_open = pl_stringio.open
+      local inflate_gzip = require("ffi-zlib").inflateGzip
+      local inflate = require("ffi-zlib").inflate
+      local cjson = require "cjson.safe"
+
+      local function decompress_helper(op, input)
+        local f = stringio_open(input)
+        local output_table = {}
+        local output_table_n = 0
+        local res, err = op(function(size) return f:read(size) end,
+                            function(res) output_table_n = output_table_n + 1
+                            output_table[output_table_n] = res end, 65535)
+        if not res then
+          return nil, err
+        end
+
+        return concat(output_table)
+      end
+
+      if ngx.ctx.buffered_proxying then
+        local body = kong.service.response.get_raw_body()
+
+        if body == nil then
+          kong.log.err("Failed to get response body: body is nil")
+
+        else
+          local content_encoding = kong.service.response.get_header("Content-Encoding")
+
+          if content_encoding then
+            if content_encoding == "gzip" then
+              local decompressed_body, err = decompress_helper(inflate_gzip, body)
+              if err then
+                kong.log.err("Failed to decompress response body: ", err)
+              end
+
+              body = decompressed_body
+
+            elseif content_encoding == "deflate" then
+              local decompressed_body, err = decompress_helper(inflate, body)
+              if err then
+                kong.log.err("Failed to decompress response body: ", err)
+              end
+
+              body = decompressed_body
+
+            elseif content_encoding == "br" then
+              kong.log.err("Failed to decompress response body: brotli not supported")
+            end
+          end
+
+          local json_body, err = cjson.decode(body)
+          if not json_body then
+            kong.log.err("Failed to json decode response body: ", err)
+            json_body = {raw_body = body}
+          end
+
+          kong.log.set_serialize_value("response.body", json_body)
+        end
+
+      else
+        kong.log.err("buffered proxying not enabled, skip logging response body")
+      end

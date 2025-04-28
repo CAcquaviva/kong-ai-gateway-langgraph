@@ -1,0 +1,27 @@
+_format_version: "3.0"
+_info:
+  select_tags:
+  - agent
+_konnect:
+  control_plane_name: ai-gateway
+services:
+- name: agent-service
+  host: httpbin.default
+  port: 8000
+  routes:
+  - name: agent-route1
+    paths:
+    - /agent-route
+    plugins:
+    - name: ai-proxy-advanced
+      instance_name: "ai-proxy-advanced-openai-agent"
+      enabled: true
+      config:
+        targets:
+        - auth:
+            header_name: "Authorization"
+            header_value: "Bearer <your_openai_api_key>"
+          route_type: "llm/v1/chat"
+          model:
+            provider: "openai"
+            name: "gpt-4"

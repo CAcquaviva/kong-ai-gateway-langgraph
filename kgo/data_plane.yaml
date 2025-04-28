@@ -1,0 +1,59 @@
+kind: KonnectExtension
+apiVersion: konnect.konghq.com/v1alpha1
+metadata:
+ name: konnect-config1
+ namespace: kong
+spec:
+ clientAuth:
+   certificateSecret:
+     provisioning: Automatic
+ konnect:
+   controlPlane:
+     ref:
+       type: konnectNamespacedRef
+       konnectNamespacedRef:
+         name: ai-gateway
+---
+apiVersion: gateway-operator.konghq.com/v1beta1
+kind: DataPlane
+metadata:
+ name: dataplane1
+ namespace: kong
+spec:
+ extensions:
+ - kind: KonnectExtension
+   name: konnect-config1
+   group: konnect.konghq.com
+ deployment:
+   podTemplateSpec:
+     spec:
+       containers:
+       - name: proxy
+         image: kong/kong-gateway:3.10
+         env:
+         - name: KONG_UNTRUSTED_LUA_SANDBOX_REQUIRES
+           value: pl.stringio, ffi-zlib, cjson.safe
+ network:
+   services:
+     ingress:
+       name: proxy1
+       type: LoadBalancer
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kong
+  namespace: kong
+  labels:
+    app.kubernetes.io/name: kong
+spec:
+ selector:
+   matchLabels:
+     gateway-operator.konghq.com/dataplane-service-type: ingress
+ endpoints:
+ - targetPort: metrics
+   scheme: http
+ jobLabel: kong
+ namespaceSelector:
+   matchNames:
+     - kong
