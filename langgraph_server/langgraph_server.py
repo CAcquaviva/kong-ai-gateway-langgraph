@@ -1,99 +1,67 @@
-from typing import Annotated, TypedDict
-from langgraph.graph import StateGraph, START, END
-from langchain_core.messages import BaseMessage
-from langchain_core.messages import SystemMessage
-from langgraph.graph.message import add_messages
+from langgraph.prebuilt import create_react_agent
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
-from langgraph.prebuilt import ToolNode
-
 from langchain_community.utilities.openweathermap import OpenWeatherMapAPIWrapper
 import httpx
 
-
-class State(TypedDict):
-    messages: Annotated[list[BaseMessage], add_messages]
 
 
 @tool
 def get_weather(location: str):
     """Call to get the weather from a specific location."""
+    print("calling get_weather function")
     openweathermap_url = kong_dp + "/openweathermap-route"
     result = httpx.get(openweathermap_url, params={"q": location})
     return result.json()
 
 
 @tool
-def get_composer(piece: str):
-    """Call to get the composer of a specific piece."""
-    deezer_url = kong_dp + "/deezer-route"
-    result = httpx.get(deezer_url, params={"q": piece})
-    return result.json()["data"][0]["artist"]["name"]
+def get_music_concerts(location: str):
+    """Call to get the events in a given location."""
+    print("calling get_music_concerts function")
+    searchevent_url = kong_dp + "/searchevent-route"
+    location = location.replace(" ", "_")
+    data={
+        "query": {
+            "$query": {
+                "$and": [
+                    {
+                        "categoryUri": "dmoz/Arts/Music/Bands_and_Artists"
+                    },
+                    {
+                        "locationUri": f"http://en.wikipedia.org/wiki/{location}"
+                    }
+                ]
+            },
+            "$filter": {
+                "forceMaxDataTimeWindow": "31"
+            }
+        },
+        "resultType": "events",
+        "eventsSortBy": "date",
+        "eventImageCount": 1,
+        "storyImageCount": 1
+    }
+    result = httpx.post(searchevent_url, json=data)
+    return result.json()["events"]["results"][0]["concepts"][0]["label"]["eng"]
 
 
 @tool
-def get_mathematician(theorem: str):
-    """Call to get the mathematician of a specific theorem."""
-    wikipedia_url = kong_dp + "/wikipedia-route"
-    result = httpx.get(wikipedia_url, params={"srsearch": theorem})
-    return result.json()["query"]["search"][0]
+def get_traffic(location: str):
+    """Call to get the traffic situation of a given location."""
+    print("calling get_traffic function")
+    traffic_url = kong_dp + "/tavily-traffic-route"
+    data={"query": f"Generally, what is the worst time of day for car traffic in {location}", "search_depth": "advanced"}
+    result = httpx.post(traffic_url, json=data)
+    return result.json()["results"][0]["content"]
 
 
-
-def call_model(state: State):
-    system_prompt = SystemMessage(
-        "You are a helpful AI assistant, please convert temperatures to Celsius."
-    )
-    response = client.invoke([system_prompt] + state["messages"])
-    return {"messages": [response]}
-
-
-# Define the conditional edge that determines whether to continue or not
-def should_continue(state: State):
-    messages = state["messages"]
-    last_message = messages[-1]
-    # If there is no function call, then we finish
-    if not last_message.tool_calls:
-        return "end"
-    # Otherwise if there is, we continue
-    else:
-        return "continue"
-
-
-def print_stream(stream):
-    for s in stream:
-        message = s["messages"][-1]
-        if isinstance(message, tuple):
-            print(message)
-        else:
-            message.pretty_print()
-
-
-tools = [get_weather, get_composer, get_mathematician]
-tool_node = ToolNode(tools)
-
-
-builder = StateGraph(State)
-builder.add_node("agent_node", call_model)
-builder.add_edge(START, "agent_node")
-builder.add_node("tool_node", tool_node)
-builder.add_conditional_edges('agent_node', should_continue, {"continue": "tool_node", "end": END})
-builder.add_edge("tool_node", "agent_node")
-
-
-graph = builder.compile()
-print(graph.get_graph().draw_ascii())
-
-
-kong_dp = "http://localhost:80"
+tools = [get_weather, get_music_concerts, get_traffic]
+#kong_dp = "http://127.0.0.1"
+kong_dp = "http://proxy1.kong"
 agent_url = kong_dp + "/agent-route"
 
 client = ChatOpenAI(base_url=agent_url, model="", api_key="dummy", default_headers={"apikey": "123456"})
-client = client.bind_tools(tools)
 
-text = "What's the weather in the city where the composer of 'Like a Rolling Stone' was born?"
 
-print("start streaming the graph")
-inputs = {"messages": [("user", text)]}
-print_stream(graph.stream(inputs, stream_mode="values"))
-print("stop streaming the graph")
+graph = create_react_agent(client, tools)

@@ -1,0 +1,132 @@
+_format_version: "3.0"
+_info:
+  select_tags:
+  - agent
+_konnect:
+  control_plane_name: ai-gateway
+services:
+- name: openweathermap-service
+  url: https://api.openweathermap.org/data/2.5/weather
+  routes:
+  - name: openweathermap-route
+    paths:
+    - /openweathermap-route
+    plugins:
+    - name: request-transformer
+      instance_name: request-transformer-openweathermap
+      config:
+        add:
+          querystring:
+          - "appid:<your_openweathermap_api_key>"
+- name: searchevent-service
+  url: https://eventregistry.org/api/v1/event/getEvents
+  routes:
+  - name: searchevent-route
+    paths:
+    - /searchevent-route
+    plugins:
+    - name: request-transformer
+      instance_name: request-transformer-events
+      config:
+        add:
+          body:
+          - "apiKey:<your_event_search_api_key>"
+- name: tavily-trafficservice
+  url: https://api.tavily.com/search
+  routes:
+  - name: tavily-traffic-route
+    paths:
+    - /tavily-traffic-route
+    plugins:
+    - name: request-transformer
+      instance_name: request-transformer-tavily-traffic
+      config:
+        add:
+          headers:
+          - "Authorization:Bearer <your_tavely_api_key>"
+- name: agent-service
+  host: httpbin.default
+  port: 8000
+  routes:
+  - name: agent-route1
+    paths:
+    - /agent-route
+    plugins:
+    - name: ai-proxy-advanced
+      instance_name: "ai-proxy-advanced-agent"
+      enabled: true
+      config:
+        balancer:
+          algorithm: semantic
+        embeddings:
+          model:
+            provider: openai
+            name: mxbai-embed-large
+            options:
+              upstream_url: "http://ollama.ollama:11434/v1/embeddings"
+        vectordb:
+          dimensions: 1024
+          distance_metric: cosine
+          strategy: redis
+          threshold: 0.8
+          redis:
+            host: redis-stack.redis.svc.cluster.local
+            port: 6379
+        targets:
+        - model:
+            provider: "openai"
+            name: "o3-mini"
+          auth:
+            header_name: "Authorization"
+            header_value: "Bearer <your_openai_api_key>"
+          route_type: "llm/v1/chat"
+          description: "sports, soccer, football, basketball"
+          logging:
+            log_payloads: true
+            log_statistics: true          
+        - model:
+            provider: "mistral"
+            name: "mistral-large-latest"
+            options:
+              mistral_format: "openai"
+              upstream_url: "https://api.mistral.ai/v1/chat/completions"
+          auth:
+            header_name: "Authorization"
+            header_value: "Bearer <your_mistral_api_key>"
+          route_type: "llm/v1/chat"
+          description: "piano, orchestra, liszt, classical music, rock, pop music"
+          logging:
+            log_payloads: true
+            log_statistics: true          
+        - model:
+            provider: "anthropic"
+            name: "claude-3-7-sonnet-20250219"
+            options:
+              anthropic_version: "2023-06-01"
+              max_tokens: 200
+          auth:
+            header_name: "x-api-key"
+            header_value: "<your_anthropic_api_key>"
+          route_type: "llm/v1/chat"
+          description: "mathematics, algebra, calculus, trigonometry"
+          logging:
+            log_payloads: true
+            log_statistics: true   
+   - name: key-auth
+      instance_name: key-auth1
+      enabled: true
+consumers:
+- keyauth_credentials:
+  - key: "123456"
+  username: user1
+  plugins:
+  - name: ai-rate-limiting-advanced
+    instance_name: ai-rate-limiting-advanced-consumer1
+    enabled: true
+    config:
+      llm_providers:
+      - name: openai
+        window_size:
+        - 60
+        limit:
+        - 800

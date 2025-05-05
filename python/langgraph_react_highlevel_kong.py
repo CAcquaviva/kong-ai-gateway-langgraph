@@ -60,13 +60,17 @@ def get_traffic(location: str):
 
 
 tools = [get_weather, get_music_concert, get_traffic]
+
+
 kong_dp = "http://127.0.0.1"
 agent_url = kong_dp + "/agent-route"
 
-model = ChatOpenAI(base_url=agent_url, model="", api_key="dummy", default_headers={"apikey": "123456"})
+client = ChatOpenAI(base_url=agent_url, model="", api_key="dummy", default_headers={"apikey": "123456"})
 
 
-graph = create_react_agent(model, tools)
+graph = create_react_agent(client, tools)
+print(graph.get_graph().draw_ascii())
+
 
 
 
@@ -77,11 +81,6 @@ def print_stream(stream):
             print(message)
         else:
             message.pretty_print()
-
-
-
-
-
 
 
 inputs = {"messages": [("user", "In my next vacation, I'm planning to visit the city where Jimi Hendrix was born? Is there any music concert to see? Also provide weather and traffic information about the city")]}
