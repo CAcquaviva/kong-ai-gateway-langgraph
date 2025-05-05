@@ -20,8 +20,26 @@ services:
         targets:
         - auth:
             header_name: "Authorization"
-            header_value: "Bearer <your_openai_api_key>"
+            header_value: "Bearer <your_OPENAI_API_KEY"
           route_type: "llm/v1/chat"
           model:
             provider: "openai"
             name: "gpt-4"
+    - name: key-auth
+      instance_name: key-auth1
+      enabled: true
+consumers:
+- keyauth_credentials:
+  - key: "123456"
+  username: user1
+  plugins:
+  - name: ai-rate-limiting-advanced
+    instance_name: ai-rate-limiting-advanced-consumer1
+    enabled: true
+    config:
+      llm_providers:
+      - name: openai
+        window_size:
+        - 60
+        limit:
+        - 800

@@ -1,0 +1,10 @@
+{
+    "dependencies": [
+      ".",
+      "langchain_openai",
+      "langchain_community"
+    ],
+    "graphs": {
+      "agent": "./langgraph_react_kong.py:graph"
+    }
+}

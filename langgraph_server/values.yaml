@@ -1,0 +1,30 @@
+images:
+  apiServerImage:
+    pullPolicy: Always
+    repository: claudioacquaviva/langgraph-kong1
+    tag: latest
+
+config:
+  langGraphCloudLicenseKey: ""
+
+studio:
+  enabled: false
+
+postgres:
+  statefulSet:
+    resources:
+      limits:
+        cpu: 500m
+        memory: 1Gi
+      requests:
+        cpu: 500m
+        memory: 1Gi
+
+apiServer:
+  service:
+    type: LoadBalancer
+    httpPort: 8090
+  deployment:
+    extraEnv:
+      - name: LANGSMITH_API_KEY
+        value: "<your_langsmith_api_key"
